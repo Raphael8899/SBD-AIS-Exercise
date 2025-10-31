@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  postgres-db:
+    image: postgres:18
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: order
+      POSTGRES_USER: docker
+      POSTGRES_PASSWORD: docker
+      POSTGRES_TCP_PORT: 5432
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - order-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docker -d order"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  orderservice:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orderservice
+    environment:
+      POSTGRES_DB: order
+      POSTGRES_USER: docker
+      POSTGRES_PASSWORD: docker
+      POSTGRES_TCP_PORT: 5432
+      DB_HOST: postgres-db
+    ports:
+      - "3000:3000"
+    networks:
+      - order-network
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    command: ["/app/ordersystem"]
+
+volumes:
+  postgres-data:
+
+networks:
+  order-network:
+    driver: bridge
