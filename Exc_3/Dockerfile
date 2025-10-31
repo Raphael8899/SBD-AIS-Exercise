@@ -1,8 +1,8 @@
 ﻿# build stage
-FROM golang:1.25 AS builder
+FROM golang:1.23 AS builder
 WORKDIR /app
 COPY . .
-RUN cd /app && go mod download && CGO_ENABLED=0 GOOS=linux go build -o /app/ordersystem
+RUN go mod download && CGO_ENABLED=0 GOOS=linux go build -o /app/ordersystem
 
 # runtime stage  
 FROM alpine:latest
