@@ -8,9 +8,14 @@ import (
 const (
 	orderFilename = "order_%d.md"
 
-	// todo create markdown emplate, fields should be able to be populated with fmt.Sprintf
-	markdownTemplate = `
+	// formatted markdown template
+	markdownTemplate = `# Order: %d
 
+| Created At      | Drink ID | Amount |
+|-----------------|----------|--------|
+| %s | %d        | %d      |
+
+Thanks for drinking with us!
 `
 )
 

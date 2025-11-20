@@ -6,7 +6,7 @@ networks:
 
 volumes:
   order_pg_vol:
-  # todo
+  minio_data: 
 
 services:
   traefik:
@@ -22,7 +22,6 @@ services:
       - "80:80"
       - "8080:8080"
     volumes:
-      # Add Docker as a mounted volume, so that Traefik can read the labels of other services
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     networks:
       - web
@@ -80,9 +79,14 @@ services:
       - PGPORT=5555
 
   order-minio:
-    # todo use minio/minio:latest as image
-    # expose 8500
-    # add to network intercom
-    # use the following commands: "server", "--address", ":8500", "/data"
-    # map the data volume
-    # set environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD
+    image: minio/minio:latest
+    ports:
+      - "8500:8500"
+    networks:
+      - intercom
+    command: ["server", "--address", ":8500", "/data"]
+    volumes:
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=root
+      - MINIO_ROOT_PASSWORD=verysecret
