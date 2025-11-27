@@ -23,11 +23,13 @@ secrets:
     file: docker/s3_password_secret
 
 services:
+
+  #Traefik
   traefik:
     image: traefik:v3.6.1
     command:
       - --api.dashboard=true
-      - --api.insecure=false
+      - --api.insecure=true
       - --providers.swarm.endpoint=unix:///var/run/docker.sock
       - --providers.swarm.exposedbydefault=false
       - --providers.swarm.network=web
@@ -39,54 +41,74 @@ services:
         protocol: tcp
         mode: ingress
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # Traefik reads Swarm API
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - web
     deploy:
-      # todo
-      # Replicate only to manager
-      # expose dashboard to localhost/dashboard
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.api.rule=Host(`dashboard.localhost`)
+        - traefik.http.routers.api.service=api@internal
+        - traefik.http.services.dummy.loadbalancer.server.port=9999
 
 
+  # Frontend
   frontend:
     image: ghcr.io/ddibiasi/sbd-ais-exercise/frontend:1.0
     networks:
       - web
     deploy:
-      # todo deploy globally
-      # should be available at http://localhost from every node
+      mode: global
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.frontend.rule=Host(`localhost`)
+        - traefik.http.services.frontend.loadbalancer.server.port=80
 
 
+
+  # Orderservice
   orderservice:
     image: ghcr.io/ddibiasi/sbd-ais-exercise/orderservice:1.0
-    command: [ "/app/ordersystem" ]
+    command: ["/app/ordersystem"]
     depends_on:
       - postgres
       - minio
-    secrets:
-      # todo use secrets
-    environment:
-      - POSTGRES_DB=order
-      - PGPORT=5555
-      - DB_HOST=postgres
-      - S3_ENDPOINT=minio:8500
-      # todo use secrets
-      - S3_ACCESS_KEY_ID_FILE=
-      - S3_SECRET_ACCESS_KEY_FILE=
-      - POSTGRES_USER_FILE=
-      - POSTGRES_PASSWORD_FILE=
     networks:
       - web
       - intercom
+    secrets:
+      - postgres_user
+      - postgres_password
+      - s3_user
+      - s3_password
+    environment:
+      POSTGRES_DB: order
+      PGPORT: 5555
+      DB_HOST: postgres
+      S3_ENDPOINT: minio:8500
+
+      POSTGRES_USER_FILE: /run/secrets/postgres_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      S3_ACCESS_KEY_ID_FILE: /run/secrets/s3_user
+      S3_SECRET_ACCESS_KEY_FILE: /run/secrets/s3_password
     deploy:
-      # todo deploy global
-      # Should be reachable at http://orders.localhost
-      # always restart container on failure
+      mode: global
       restart_policy:
         condition: any
         delay: 5s
         window: 120s
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.orders.rule=Host(`orders.localhost`)
+        - traefik.http.services.orders.loadbalancer.server.port=8080
 
+
+  
+  # POSTGRES
   postgres:
     image: postgres:18
     volumes:
@@ -94,30 +116,36 @@ services:
     networks:
       - intercom
     secrets:
-      # todo use secrets
+      - postgres_user
+      - postgres_password
     environment:
-      - POSTGRES_DB=order
-      - PGPORT=5555
-      # todo use secrets
-      - POSTGRES_USER_FILE=
-      - POSTGRES_PASSWORD_FILE=
+      POSTGRES_DB: order
+      PGPORT: 5555
+      POSTGRES_USER_FILE: /run/secrets/postgres_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     deploy:
-      # todo replicate only to one worker node
-      # todo use constraints
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager   # moved to manager so it can run
 
+
+  #Mino
   minio:
     image: minio/minio:latest
     command: [ "server", "--address", ":8500", "/data" ]
     volumes:
       - minio_vol:/data
-    secrets:
-      # todo use secrets
-    environment:
-      # todo use secrets
-      - MINIO_ROOT_USER_FILE=
-      - MINIO_ROOT_PASSWORD_FILE=
     networks:
       - intercom
+    secrets:
+      - s3_user
+      - s3_password
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/s3_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/s3_password
     deploy:
-      # todo replicate only to one worker node
-      # todo use constraints
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager   
